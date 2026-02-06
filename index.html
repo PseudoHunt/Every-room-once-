@@ -85,22 +85,30 @@
     cursor:not-allowed;
   }
 
+  /* ===== Overlay (FIXED) =====
+     - Scrollable for long ending text
+     - Click-to-close handled in JS (locked for ending)
+  */
   #overlay{
     position:fixed;
     inset:0;
     background:#ffffff;
     color:#111;
     display:none;
-    align-items:center;
-    justify-content:center;
     padding:40px 18px;
     text-align:left;
+
+    /* NEW: allow scrolling */
+    overflow:auto;
   }
   #overlayCard{
     width:min(760px, 100%);
     white-space:pre-wrap;
     font-size:18px;
     line-height:1.65;
+
+    /* NEW: center while allowing scroll */
+    margin:0 auto;
   }
   #overlayHint{
     margin-top:16px;
@@ -138,7 +146,8 @@
   </div>
 </div>
 
-<div id="overlay" onclick="hideOverlay()">
+<!-- CHANGED: click goes through JS gate (locked during ending) -->
+<div id="overlay" onclick="onOverlayClick()">
   <div id="overlayCard">
     <div id="overlayText"></div>
     <div id="overlayHint">(click anywhere to continue)</div>
@@ -379,7 +388,6 @@ It does not reflect the room.
 It absorbs it.
 
 The wall firms beneath your hand again.`,
-        // Bug 2 fix: do not advance time when an artifact is captured
         noTimeAdvanceOnSuccess: true
       }
     }
@@ -497,7 +505,6 @@ In your grasp is a dark, weighty object—
 an Anchor Stone.
 
 The current changes when it is gone.`,
-        // Bug 2 fix:
         noTimeAdvanceOnSuccess: true
       }
     }
@@ -609,7 +616,6 @@ It does not hum.
 It does not vibrate.
 
 It simply feels complete.`,
-        // Bug 2 fix:
         noTimeAdvanceOnSuccess: true
       }
     }
@@ -683,7 +689,7 @@ Everything holds,
 as if this has always been the correct arrangement.
 
 At the center of the space,
-a magical stone like object 
+a magical stone like object
 remains fixed.
 
 it does not tumble.
@@ -740,21 +746,35 @@ const ROOM_LIST = ["nursery","library","basement","attic"];
 
 let state = {
   room: "intro",
-  hour: 0,          // Bug 1 fix: start at 0 o'clock
+  hour: 0,
   inventory: [],
-  ended: false
+  ended: false,
+
+  // NEW: locks overlay so ending can't be dismissed
+  overlayLocked: false
 };
 
 /* ==============================
-   OVERLAY
+   OVERLAY (FIXED)
    ============================== */
 
-function showOverlay(text){
+function showOverlay(text, bg="#ffffff", fg="#111"){
+  const overlay = document.getElementById("overlay");
   document.getElementById("overlayText").innerText = text;
-  document.getElementById("overlay").style.display = "flex";
+
+  overlay.style.background = bg;
+  overlay.style.color = fg;
+
+  overlay.style.display = "block"; // scroll-friendly
+}
+
+function onOverlayClick(){
+  if (state.overlayLocked) return;
+  hideOverlay();
 }
 
 function hideOverlay(){
+  if (state.overlayLocked) return;
   document.getElementById("overlay").style.display = "none";
 }
 
@@ -769,7 +789,6 @@ function advanceTime(){
 
   state.hour += 1;
 
-  // At the moment time would become 12, strike and reset
   if (state.hour >= 12){
     triggerClockStrike();
     return;
@@ -779,6 +798,10 @@ function advanceTime(){
 }
 
 function triggerClockStrike(){
+  // ensure non-ending overlays are dismissible
+  state.overlayLocked = false;
+
+  // reset overlay styling to white
   showOverlay(`The clock strikes.
 
 Once.
@@ -791,9 +814,8 @@ The sound carries through the house,
 touching every room at the same time.
 
 Once the light fades
-you find yourself back in the Foyer!!`);
+you find yourself back in the Foyer!!`, "#ffffff", "#111");
 
-  // Reset to start of loop
   state.hour = 0;
   state.room = "foyer";
 
@@ -803,6 +825,10 @@ you find yourself back in the Foyer!!`);
 function triggerEnding(){
   state.ended = true;
 
+  // NEW: lock overlay forever (no click-to-close)
+  state.overlayLocked = true;
+
+  // NEW: light green ending background
   showOverlay(`The object holds.
 
 For a moment, nothing else does.
@@ -834,7 +860,9 @@ Someone stands at the bow,
 shielding their eyes as they look toward you.
 
 You have finally escaped the house
-THE END. `);
+THE END.
+
+(Refresh the page to restart.)`, "#c9f7c2", "#0b1a0b");
 
   render();
 }
@@ -844,9 +872,9 @@ THE END. `);
    ============================== */
 
 function enterHouse(){
-  // Bug 3 fix:
-  // Intro text stops BEFORE going below deck.
-  // Clicking proceeds into the transition + foyer.
+  // ensure intro overlay is dismissible
+  state.overlayLocked = false;
+
   showOverlay(`You descend.
 
 The space beneath the deck is dark.
@@ -862,9 +890,8 @@ It does not move.
 
 A light flickers on.
 
-You are standing in a foyer.`);
+You are standing in a foyer.`, "#ffffff", "#111");
 
-  // Entering the house does NOT consume time (cleaner onboarding)
   state.room = "foyer";
   state.hour = 0;
 
@@ -873,7 +900,7 @@ You are standing in a foyer.`);
 
 function moveTo(roomKey){
   state.room = roomKey;
-  advanceTime(); // movement costs 1 hour
+  advanceTime();
 }
 
 function examine(){
@@ -885,6 +912,9 @@ function examine(){
   if (ex.requires){
     const ok = ex.requires.every(item => state.inventory.includes(item));
     if (!ok){
+      // ensure this overlay is dismissible
+      state.overlayLocked = false;
+
       showOverlay(`Three slots interrupt its surface.
 
 Not decorative.
@@ -893,14 +923,18 @@ Not random.
 They read like absence -
 as if the object is incomplete
 until three things decide to belong to it.
-You examine it.`);
-      return; // no time cost
+
+You examine it.`, "#ffffff", "#111");
+      return;
     }
   }
 
   const alreadyHad = ex.gives ? state.inventory.includes(ex.gives) : false;
 
-  showOverlay(ex.text);
+  // ensure artifact overlays are dismissible
+  state.overlayLocked = false;
+
+  showOverlay(ex.text, "#ffffff", "#111");
 
   if (ex.gives && !alreadyHad){
     state.inventory.push(ex.gives);
@@ -911,15 +945,11 @@ You examine it.`);
     return;
   }
 
-  // Bug 2 fix:
-  // If this examine successfully gives an artifact, do NOT advance time.
-  // (You return to the room state you arrived on.)
   if (ex.gives && !alreadyHad && ex.noTimeAdvanceOnSuccess){
     render();
     return;
   }
 
-  // Otherwise, examine costs 1 hour
   advanceTime();
 }
 
@@ -936,9 +966,6 @@ function render(){
     ? "—"
     : `Time: ${state.hour} / 12`;
 
-  // Prose rendering:
-  // intro uses its own fixed text
-  // other rooms use hour+1 to map to State 1..12
   let proseText = "";
   if (state.room === "intro"){
     proseText = rooms.intro.states[1];
@@ -949,15 +976,12 @@ function render(){
 
   document.getElementById("prose").innerText = proseText;
 
-  // Inventory
   document.getElementById("inventory").innerText =
     state.inventory.length ? state.inventory.join(", ") : "—";
 
-  // Movement buttons
   const movementEl = document.getElementById("movement");
   movementEl.innerHTML = "";
 
-  // Examine button
   const examineEl = document.getElementById("examine");
   examineEl.innerHTML = "";
 
@@ -989,7 +1013,6 @@ function render(){
     movementEl.appendChild(b);
   });
 
-  // Examine appears if room has examine for current proseIndex
   const proseIndex = state.hour + 1;
   const ex = rooms[state.room]?.examine?.[proseIndex];
   if (ex){
