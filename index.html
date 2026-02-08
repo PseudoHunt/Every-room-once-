@@ -829,9 +829,19 @@ function triggerEnding(){
   state.overlayLocked = true;
 
   // NEW: light green ending background
-  showOverlay(`The object holds.
+  showOverlay(`You bring the artifacts closer.
 
-For a moment, nothing else does.
+The Veil Fragment settles into the first recess
+without friction.
+
+The Resonance Key aligns with the second,
+its edges matching perfectly.
+
+The Anchor Stone resists,
+then yields,
+locking into place with quiet finality.
+
+The object accepts the arrangement.
 
 A white light fills the attic,
 clean and absolute.
@@ -894,7 +904,7 @@ You are standing in a foyer.`, "#ffffff", "#111");
 
   state.room = "foyer";
   state.hour = 0;
-
+  state.inventory = [];
   render();
 }
 
